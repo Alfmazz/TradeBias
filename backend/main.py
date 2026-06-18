@@ -6,7 +6,7 @@ app = FastAPI(title="TradeBias API", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["http://localhost:3000", "https://trade-bias.vercel.app"],
     allow_methods=["GET"],
     allow_headers=["*"],
 )

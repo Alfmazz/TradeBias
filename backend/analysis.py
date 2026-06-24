@@ -5,26 +5,7 @@ import ta
 
 TICKER_PATTERN = re.compile(r'^[A-Z0-9.\-]{1,10}$')
 
-# ── TRANSLATION TEMPLATES ─────────────────────────────────────────────
-# Each key has an English and Spanish version. "{placeholders}" get
-# filled in with real numbers using Python's str.format().
 TEMPLATES = {
-    "ema20_bull": {
-        "en": "Price ({price:.2f}) above EMA 20 ({ema20:.2f})",
-        "es": "Precio ({price:.2f}) por encima de la EMA 20 ({ema20:.2f})",
-    },
-    "ema20_bear": {
-        "en": "Price ({price:.2f}) below EMA 20 ({ema20:.2f})",
-        "es": "Precio ({price:.2f}) por debajo de la EMA 20 ({ema20:.2f})",
-    },
-    "ema50_bull": {
-        "en": "Price ({price:.2f}) above EMA 50 ({ema50:.2f})",
-        "es": "Precio ({price:.2f}) por encima de la EMA 50 ({ema50:.2f})",
-    },
-    "ema50_bear": {
-        "en": "Price ({price:.2f}) below EMA 50 ({ema50:.2f})",
-        "es": "Precio ({price:.2f}) por debajo de la EMA 50 ({ema50:.2f})",
-    },
     "rsi_bull": {
         "en": "RSI ({rsi:.1f}) in healthy bullish zone (50–65)",
         "es": "RSI ({rsi:.1f}) en zona alcista saludable (50–65)",
@@ -125,9 +106,9 @@ TEMPLATES = {
         "en": "RSI is very low — possible continued weakness or oversold bounce setup.",
         "es": "El RSI está muy bajo — posible debilidad continua o configuración de rebote por sobreventa.",
     },
-    "risk_below_ema50": {
-        "en": "Price is below EMA 50 — medium-term trend is still down.",
-        "es": "El precio está por debajo de la EMA 50 — la tendencia de mediano plazo sigue siendo bajista.",
+    "risk_below_vwap": {
+        "en": "Price is below VWAP — short-term sellers are in control.",
+        "es": "El precio está por debajo del VWAP — los vendedores de corto plazo están en control.",
     },
     "risk_low_volume": {
         "en": "Volume is well below average — move may lack conviction.",
@@ -141,7 +122,6 @@ TEMPLATES = {
 
 
 def _t(lang: str, key: str, **kwargs) -> str:
-    """Looks up a translated template and fills in the real numbers."""
     lang = lang if lang in ("en", "es") else "en"
     entry = TEMPLATES.get(key, {})
     template = entry.get(lang) or entry.get("en", "")
@@ -149,11 +129,6 @@ def _t(lang: str, key: str, **kwargs) -> str:
 
 
 def analyze_ticker(ticker: str, lang: str = "en") -> dict:
-    """
-    Downloads price data for a ticker, calculates indicators,
-    and returns a bias result with explanation in the requested language.
-    """
-
     ticker = ticker.strip().upper()
     lang = lang if lang in ("en", "es") else "en"
 
@@ -183,13 +158,11 @@ def analyze_ticker(ticker: str, lang: str = "en") -> dict:
     if len(df) < 60:
         return {"error": "Not enough data to calculate indicators. Try a different ticker."}
 
-    high = df["High"]
-    low = df["Low"]
-    close = df["Close"]
+    high   = df["High"]
+    low    = df["Low"]
+    close  = df["Close"]
     volume = df["Volume"]
 
-    df["ema20"] = ta.trend.EMAIndicator(close, window=20).ema_indicator()
-    df["ema50"] = ta.trend.EMAIndicator(close, window=50).ema_indicator()
     df["rsi"] = ta.momentum.RSIIndicator(close, window=14).rsi()
 
     macd_obj = ta.trend.MACD(close)
@@ -216,8 +189,6 @@ def analyze_ticker(ticker: str, lang: str = "en") -> dict:
     prev   = df.iloc[-2]
 
     price    = float(latest["Close"])
-    ema20    = float(latest["ema20"])
-    ema50    = float(latest["ema50"])
     rsi      = float(latest["rsi"])
     macd     = float(latest["macd"])
     macd_sig = float(latest["macd_signal"])
@@ -236,20 +207,7 @@ def analyze_ticker(ticker: str, lang: str = "en") -> dict:
     bear_points = 0
     signals     = []
 
-    if price > ema20:
-        score += 2; bull_points += 1
-        signals.append({"label": "EMA20", "result": "bull", "note": _t(lang, "ema20_bull", price=price, ema20=ema20)})
-    else:
-        score -= 2; bear_points += 1
-        signals.append({"label": "EMA20", "result": "bear", "note": _t(lang, "ema20_bear", price=price, ema20=ema20)})
-
-    if price > ema50:
-        score += 2; bull_points += 1
-        signals.append({"label": "EMA50", "result": "bull", "note": _t(lang, "ema50_bull", price=price, ema50=ema50)})
-    else:
-        score -= 2; bear_points += 1
-        signals.append({"label": "EMA50", "result": "bear", "note": _t(lang, "ema50_bear", price=price, ema50=ema50)})
-
+    # RSI (±1 / ±2)
     if 50 <= rsi <= 65:
         score += 2; bull_points += 1
         signals.append({"label": "RSI", "result": "bull", "note": _t(lang, "rsi_bull", rsi=rsi)})
@@ -265,6 +223,7 @@ def analyze_ticker(ticker: str, lang: str = "en") -> dict:
     else:
         signals.append({"label": "RSI", "result": "neutral", "note": _t(lang, "rsi_neutral", rsi=rsi)})
 
+    # MACD (±1 / ±3 crossover bonus)
     prev_macd_hist = float(prev["macd_hist"])
     if macd_h > 0 and prev_macd_hist <= 0:
         score += 3; bull_points += 1
@@ -279,16 +238,18 @@ def analyze_ticker(ticker: str, lang: str = "en") -> dict:
         score -= 1; bear_points += 1
         signals.append({"label": "MACD", "result": "bear", "note": _t(lang, "macd_bear", macd_h=macd_h)})
 
+    # Volume (±2)
     vol_ratio = vol / vol_avg if vol_avg > 0 else 1.0
-    if vol_ratio >= 1.2 and price > ema20:
+    if vol_ratio >= 1.2 and price > vwap:
         score += 2; bull_points += 1
         signals.append({"label": "Volume", "result": "bull", "note": _t(lang, "volume_bull", vol_ratio=vol_ratio)})
-    elif vol_ratio >= 1.2 and price < ema20:
+    elif vol_ratio >= 1.2 and price < vwap:
         score -= 2; bear_points += 1
         signals.append({"label": "Volume", "result": "bear", "note": _t(lang, "volume_bear", vol_ratio=vol_ratio)})
     else:
         signals.append({"label": "Volume", "result": "neutral", "note": _t(lang, "volume_neutral", vol_ratio=vol_ratio)})
 
+    # VWAP (±2)
     if price > vwap:
         score += 2; bull_points += 1
         signals.append({"label": "VWAP", "result": "bull", "note": _t(lang, "vwap_bull", price=price, vwap=vwap)})
@@ -296,6 +257,7 @@ def analyze_ticker(ticker: str, lang: str = "en") -> dict:
         score -= 2; bear_points += 1
         signals.append({"label": "VWAP", "result": "bear", "note": _t(lang, "vwap_bear", price=price, vwap=vwap)})
 
+    # Supertrend (±2)
     if supertrend_up:
         score += 2; bull_points += 1
         signals.append({"label": "Supertrend", "result": "bull", "note": _t(lang, "supertrend_bull", supertrend_val=supertrend_val)})
@@ -303,6 +265,7 @@ def analyze_ticker(ticker: str, lang: str = "en") -> dict:
         score -= 2; bear_points += 1
         signals.append({"label": "Supertrend", "result": "bear", "note": _t(lang, "supertrend_bear", supertrend_val=supertrend_val)})
 
+    # A/D (±1)
     if ad_now > ad_prev10:
         score += 1; bull_points += 1
         signals.append({"label": "A/D", "result": "bull", "note": _t(lang, "ad_bull")})
@@ -310,6 +273,7 @@ def analyze_ticker(ticker: str, lang: str = "en") -> dict:
         score -= 1; bear_points += 1
         signals.append({"label": "A/D", "result": "bear", "note": _t(lang, "ad_bear")})
 
+    # Force Index (±1)
     if fi > 0:
         score += 1; bull_points += 1
         signals.append({"label": "FI", "result": "bull", "note": _t(lang, "fi_bull")})
@@ -317,13 +281,15 @@ def analyze_ticker(ticker: str, lang: str = "en") -> dict:
         score -= 1; bear_points += 1
         signals.append({"label": "FI", "result": "bear", "note": _t(lang, "fi_bear")})
 
-    max_possible = 17
+    # ── BIAS & CONFIDENCE ─────────────────────────────────────────────
+    # max_possible = 13 (MACD max=3, Volume=2, VWAP=2, Supertrend=2, RSI=2, A/D=1, FI=1)
+    max_possible = 13
     pct = ((score + max_possible) / (2 * max_possible)) * 100
     pct = max(0, min(100, pct))
 
-    if score >= 6:
+    if score >= 5:
         bias = "bullish"
-    elif score <= -6:
+    elif score <= -5:
         bias = "bearish"
     else:
         bias = "neutral"
@@ -338,6 +304,7 @@ def analyze_ticker(ticker: str, lang: str = "en") -> dict:
     else:
         confidence = "low"
 
+    # ── CHART DATA ────────────────────────────────────────────────────
     candles = []
     for idx, row in df.iterrows():
         candles.append({
@@ -351,34 +318,32 @@ def analyze_ticker(ticker: str, lang: str = "en") -> dict:
             "supertrend": round(float(row["supertrend"]), 2),
         })
 
+    # ── SVP ───────────────────────────────────────────────────────────
     NUM_BINS = 24
     price_min = float(df["Low"].min())
     price_max = float(df["High"].max())
     bin_size = (price_max - price_min) / NUM_BINS if price_max > price_min else 1.0
-
     bins_volume = [0.0] * NUM_BINS
 
     for _, row in df.iterrows():
-        day_low = float(row["Low"])
-        day_high = float(row["High"])
+        day_low    = float(row["Low"])
+        day_high   = float(row["High"])
         day_volume = float(row["Volume"])
-        day_range = day_high - day_low
-
+        day_range  = day_high - day_low
         if day_range <= 0:
             bin_idx = min(int((day_low - price_min) / bin_size), NUM_BINS - 1)
             bins_volume[bin_idx] += day_volume
             continue
-
         for i in range(NUM_BINS):
-            bin_low = price_min + i * bin_size
+            bin_low  = price_min + i * bin_size
             bin_high = bin_low + bin_size
-            overlap = min(day_high, bin_high) - max(day_low, bin_low)
+            overlap  = min(day_high, bin_high) - max(day_low, bin_low)
             if overlap > 0:
                 bins_volume[i] += day_volume * (overlap / day_range)
 
     volume_profile = []
     for i in range(NUM_BINS):
-        bin_low = price_min + i * bin_size
+        bin_low  = price_min + i * bin_size
         bin_high = bin_low + bin_size
         volume_profile.append({
             "price_low":  round(bin_low, 2),
@@ -389,13 +354,14 @@ def analyze_ticker(ticker: str, lang: str = "en") -> dict:
     poc_index = max(range(NUM_BINS), key=lambda i: bins_volume[i])
     poc_price = round(price_min + (poc_index + 0.5) * bin_size, 2)
 
+    # ── NEAR-TERM RANGE ───────────────────────────────────────────────
     try:
         near_term_range = _calculate_near_term_range(ticker, price)
     except Exception:
         near_term_range = {"available": False}
 
     explanation = _build_explanation(ticker, bias, signals, lang)
-    risk_note   = _build_risk_note(rsi, price, ema20, ema50, vol_ratio, lang)
+    risk_note   = _build_risk_note(rsi, price, vwap, vol_ratio, lang)
 
     return {
         "ticker":          ticker.upper(),
@@ -412,8 +378,6 @@ def analyze_ticker(ticker: str, lang: str = "en") -> dict:
         "near_term_range": near_term_range,
         "indicators": {
             "price":            round(price, 2),
-            "ema20":            round(ema20, 2),
-            "ema50":            round(ema50, 2),
             "rsi":              round(rsi, 1),
             "macd":             round(macd, 4),
             "macd_signal":      round(macd_sig, 4),
@@ -443,22 +407,18 @@ def _calculate_near_term_range(ticker: str, current_price: float) -> dict:
         intraday.columns = intraday.columns.get_level_values(0)
 
     closes = intraday["Close"].dropna()
-
     if len(closes) < 15:
         return {"available": False}
 
     recent_closes = closes.tail(61)
-    returns_pct = recent_closes.pct_change().dropna() * 100
-
+    returns_pct   = recent_closes.pct_change().dropna() * 100
     if len(returns_pct) < 10:
         return {"available": False}
 
-    minute_vol_pct = float(returns_pct.std())
-
-    range_15_pct = minute_vol_pct * (15 ** 0.5)
-    range_30_pct = minute_vol_pct * (30 ** 0.5)
-    range_60_pct = minute_vol_pct * (60 ** 0.5)
-
+    minute_vol_pct  = float(returns_pct.std())
+    range_15_pct    = minute_vol_pct * (15 ** 0.5)
+    range_30_pct    = minute_vol_pct * (30 ** 0.5)
+    range_60_pct    = minute_vol_pct * (60 ** 0.5)
     range_15_dollar = round(current_price * range_15_pct / 100, 2)
     range_30_dollar = round(current_price * range_30_pct / 100, 2)
     range_60_dollar = round(current_price * range_60_pct / 100, 2)
@@ -482,19 +442,18 @@ def _calculate_near_term_range(ticker: str, current_price: float) -> dict:
 
 
 def _calculate_supertrend(df: pd.DataFrame, period: int = 10, multiplier: int = 3):
-    high = df["High"]
-    low = df["Low"]
+    high  = df["High"]
+    low   = df["Low"]
     close = df["Close"]
 
     atr = ta.volatility.AverageTrueRange(high, low, close, window=period).average_true_range()
-
     hl2 = (high + low) / 2
     upperband = hl2 + multiplier * atr
     lowerband = hl2 - multiplier * atr
 
     final_upper = upperband.copy()
     final_lower = lowerband.copy()
-    trend_up = pd.Series(True, index=df.index)
+    trend_up    = pd.Series(True, index=df.index)
 
     for i in range(1, len(df)):
         if close.iloc[i - 1] <= final_upper.iloc[i - 1]:
@@ -518,7 +477,6 @@ def _calculate_supertrend(df: pd.DataFrame, period: int = 10, multiplier: int = 
         [final_lower.iloc[i] if trend_up.iloc[i] else final_upper.iloc[i] for i in range(len(df))],
         index=df.index
     )
-
     return supertrend_line, trend_up
 
 
@@ -540,13 +498,13 @@ def _build_explanation(ticker, bias, signals, lang="en") -> str:
     return " ".join(parts)
 
 
-def _build_risk_note(rsi, price, ema20, ema50, vol_ratio, lang="en") -> str:
+def _build_risk_note(rsi, price, vwap, vol_ratio, lang="en") -> str:
     if rsi > 68:
         return _t(lang, "risk_rsi_high")
     if rsi < 35:
         return _t(lang, "risk_rsi_low")
-    if price < ema50:
-        return _t(lang, "risk_below_ema50")
+    if price < vwap:
+        return _t(lang, "risk_below_vwap")
     if vol_ratio < 0.7:
         return _t(lang, "risk_low_volume")
     return _t(lang, "risk_none")

@@ -15,8 +15,6 @@ interface Signal {
 
 interface Indicators {
   price: number;
-  ema20: number;
-  ema50: number;
   rsi: number;
   macd: number;
   macd_signal: number;
@@ -64,10 +62,6 @@ interface AnalysisResult {
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 const TICKER_PATTERN = /^[A-Z0-9.\-]{1,10}$/;
 
-// ── TRANSLATIONS ────────────────────────────────────────────────────
-// All fixed UI text lives here in English and Spanish. The dynamic
-// explanations (signal notes, summary, risk note) come already
-// translated from the backend, based on the ?lang= we send it.
 const T = {
   en: {
     tagline: 'CLARITY OVER PREDICTION',
@@ -78,9 +72,10 @@ const T = {
     analyzeBtn: 'Analyze →',
     analyzing: 'Analyzing...',
     fetching: 'Fetching market data...',
+    fetchingNote: 'If the server has been inactive, this can take up to a minute.',
     errEmpty: 'Enter a ticker before analyzing.',
     errInvalid: "That ticker doesn't look valid. Use only letters, numbers, dots, or hyphens (e.g. SPY, BRK.B, BTC-USD).",
-    errTimeout: 'The request took too long (more than 20 seconds). The backend might be busy — try again.',
+    errTimeout: 'The request took too long (more than 60 seconds). The backend might be busy — try again.',
     errConnect: 'Couldn\'t connect to the backend. Is "uvicorn main:app --reload --port 8000" running?',
     errBadJson: "The server's response wasn't valid.",
     errGeneric: 'Something went wrong analyzing this ticker.',
@@ -115,8 +110,6 @@ const T = {
     rsiLabel: 'RSI (14)',
     macdLabel: 'MACD',
     macdSub: (sig: string, hist: string) => `Signal: ${sig} · Hist: ${hist}`,
-    ema20Label: 'EMA 20',
-    ema50Label: 'EMA 50',
     volumeLabel: 'Volume',
     vsAvg: 'vs 20-day average',
     vwapLabel: 'VWAP (14d)',
@@ -133,14 +126,12 @@ const T = {
     analysisMeta: 'Rule-based · No AI · No predictions',
     emptyTitle: 'No ticker analyzed yet',
     emptyText: 'Enter a stock or ETF ticker above to generate a market bias. Try these:',
-    footerVersion: 'TradeBias · v0.9.0',
+    footerVersion: 'TradeBias · v0.9.1',
     footerDisclaimer: 'Not financial advice. For educational use only.',
     indicatorExplanations: {
       Price: "The most recent closing price — what the market thinks this asset is worth right now.",
       RSI: "Measures whether the price has moved up or down too fast recently. 50–65 is a healthy zone; above 70 often means it's overbought and due for a breather.",
       MACD: "Compares two moving averages to spot momentum shifts. When it crosses above zero, momentum is turning bullish — below zero, bearish.",
-      EMA20: "The 20-day average price, smoothed out. When price trades above it, the short-term trend tends to be up.",
-      EMA50: "Like EMA 20, but slower and steadier — it reflects the medium-term trend. Price above it usually means a healthier longer-term uptrend.",
       Volume: "Compares today's trading activity to the 20-day average. Higher volume on a move means more traders are involved, adding conviction to it.",
       VWAP: "The average price, weighted by how much volume traded at each level. Price above VWAP suggests recent buyers are, on average, in profit.",
       Supertrend: "A trend-following line built from recent volatility. While price stays above the line, the trend is considered up — below it, down.",
@@ -157,9 +148,10 @@ const T = {
     analyzeBtn: 'Analizar →',
     analyzing: 'Analizando...',
     fetching: 'Obteniendo datos del mercado...',
+    fetchingNote: 'Si el servidor ha estado inactivo, esto puede tardar hasta un minuto.',
     errEmpty: 'Escribe un ticker antes de analizar.',
     errInvalid: 'Ese ticker no parece válido. Usa solo letras, números, puntos o guiones (ej. SPY, BRK.B, BTC-USD).',
-    errTimeout: 'La solicitud tardó demasiado (más de 20 segundos). El backend podría estar ocupado — intenta de nuevo.',
+    errTimeout: 'La solicitud tardó demasiado (más de 60 segundos). El backend podría estar ocupado — intenta de nuevo.',
     errConnect: 'No se pudo conectar con el backend. ¿Está corriendo "uvicorn main:app --reload --port 8000"?',
     errBadJson: 'La respuesta del servidor no es válida.',
     errGeneric: 'Ocurrió un error al analizar este ticker.',
@@ -194,8 +186,6 @@ const T = {
     rsiLabel: 'RSI (14)',
     macdLabel: 'MACD',
     macdSub: (sig: string, hist: string) => `Señal: ${sig} · Hist: ${hist}`,
-    ema20Label: 'EMA 20',
-    ema50Label: 'EMA 50',
     volumeLabel: 'Volumen',
     vsAvg: 'vs promedio de 20 días',
     vwapLabel: 'VWAP (14d)',
@@ -212,14 +202,12 @@ const T = {
     analysisMeta: 'Basado en reglas · Sin IA · Sin predicciones',
     emptyTitle: 'Aún no se ha analizado ningún ticker',
     emptyText: 'Ingresa un ticker de acción o ETF arriba para generar un sesgo de mercado. Prueba estos:',
-    footerVersion: 'TradeBias · v0.9.0',
+    footerVersion: 'TradeBias · v0.9.1',
     footerDisclaimer: 'No es asesoría financiera. Solo para uso educativo.',
     indicatorExplanations: {
       Price: "El precio de cierre más reciente — lo que el mercado considera que vale este activo en este momento.",
       RSI: "Mide si el precio ha subido o bajado demasiado rápido recientemente. 50–65 es una zona saludable; por encima de 70 suele significar que está sobrecomprado y necesita una pausa.",
       MACD: "Compara dos promedios móviles para detectar cambios de momentum. Cuando cruza por encima de cero, el momentum se vuelve alcista — por debajo de cero, bajista.",
-      EMA20: "El precio promedio de 20 días, suavizado. Cuando el precio cotiza por encima, la tendencia de corto plazo tiende a ser alcista.",
-      EMA50: "Como la EMA 20, pero más lenta y estable — refleja la tendencia de mediano plazo. Precio por encima de ella suele indicar una tendencia alcista de más largo plazo más saludable.",
       Volume: "Compara la actividad de hoy con el promedio de 20 días. Mayor volumen en un movimiento significa que más operadores están involucrados, dándole más convicción.",
       VWAP: "El precio promedio, ponderado por cuánto volumen se negoció en cada nivel. Precio por encima del VWAP sugiere que los compradores recientes están, en promedio, en ganancia.",
       Supertrend: "Una línea de seguimiento de tendencia construida a partir de la volatilidad reciente. Mientras el precio se mantenga por encima de la línea, se considera tendencia alcista — por debajo, bajista.",
@@ -236,19 +224,13 @@ export default function Home() {
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [lang, setLang] = useState<Lang>('en');
 
-  // Load saved language preference on first visit
   useEffect(() => {
     const saved = localStorage.getItem('tradebias_lang');
-    if (saved === 'en' || saved === 'es') {
-      setLang(saved);
-    }
+    if (saved === 'en' || saved === 'es') setLang(saved);
   }, []);
 
-  // If a result is already showing, re-run the analysis in the new language
   useEffect(() => {
-    if (result) {
-      handleAnalyze(result.ticker);
-    }
+    if (result) handleAnalyze(result.ticker);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lang]);
 
@@ -270,55 +252,35 @@ export default function Home() {
 
   async function handleAnalyze(overrideTicker?: string) {
     const trimmed = (overrideTicker ?? ticker).trim().toUpperCase();
-
     setError(null);
     setResult(null);
 
-    if (!trimmed) {
-      setError(T[lang].errEmpty);
-      return;
-    }
-
-    if (!TICKER_PATTERN.test(trimmed)) {
-      setError(T[lang].errInvalid);
-      return;
-    }
+    if (!trimmed) { setError(T[lang].errEmpty); return; }
+    if (!TICKER_PATTERN.test(trimmed)) { setError(T[lang].errInvalid); return; }
 
     setLoading(true);
-
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 20000);
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
 
     let res: Response;
     try {
       res = await fetch(`${API_BASE}/api/analyze/${trimmed}?lang=${lang}`, { signal: controller.signal });
     } catch (err: any) {
       clearTimeout(timeoutId);
-      if (err.name === 'AbortError') {
-        setError(T[lang].errTimeout);
-      } else {
-        setError(T[lang].errConnect);
-      }
+      setError(err.name === 'AbortError' ? T[lang].errTimeout : T[lang].errConnect);
       setLoading(false);
       return;
     }
     clearTimeout(timeoutId);
 
     let data: any;
-    try {
-      data = await res.json();
-    } catch {
+    try { data = await res.json(); } catch {
       setError(T[lang].errBadJson);
       setLoading(false);
       return;
     }
 
-    if (!res.ok) {
-      setError(data.detail || T[lang].errGeneric);
-      setLoading(false);
-      return;
-    }
-
+    if (!res.ok) { setError(data.detail || T[lang].errGeneric); setLoading(false); return; }
     setResult(data as AnalysisResult);
     setLoading(false);
   }
@@ -369,12 +331,11 @@ export default function Home() {
           <div className="loading-state">
             <div className="spinner"></div>
             <p>{T[lang].fetching}</p>
+            <p style={{ fontSize: '0.7rem', color: 'var(--muted)', marginTop: 4 }}>{T[lang].fetchingNote}</p>
           </div>
         )}
 
-        {error && !loading && (
-          <div className="error-box">{error}</div>
-        )}
+        {error && !loading && <div className="error-box">{error}</div>}
 
         {result && ind && !loading && (
           <div className="results">
@@ -408,13 +369,9 @@ export default function Home() {
             <div className="section-divider">{T[lang].nearTermDivider}</div>
             <div className="card">
               <div className="card-header">
-                <div className="card-title">
-                  <div className="icon">⏱</div>
-                  {T[lang].expectedMove}
-                </div>
+                <div className="card-title"><div className="icon">⏱</div>{T[lang].expectedMove}</div>
                 <div className="card-meta">{T[lang].expectedMoveMeta}</div>
               </div>
-
               {result.near_term_range.available ? (
                 <>
                   <div className="indicators-grid">
@@ -435,16 +392,12 @@ export default function Home() {
                     </div>
                   </div>
                   <div className="explanation-box" style={{ paddingTop: 0 }}>
-                    <div className="risk-tag">
-                      {T[lang].rangeNote(result.near_term_range.minutes_of_data ?? 0)}
-                    </div>
+                    <div className="risk-tag">{T[lang].rangeNote(result.near_term_range.minutes_of_data ?? 0)}</div>
                   </div>
                 </>
               ) : (
                 <div className="explanation-box">
-                  <p className="explanation-text">
-                    {T[lang].rangeUnavailable(result.ticker)}
-                  </p>
+                  <p className="explanation-text">{T[lang].rangeUnavailable(result.ticker)}</p>
                 </div>
               )}
             </div>
@@ -452,10 +405,7 @@ export default function Home() {
             <div className="section-divider">{T[lang].priceChartDivider}</div>
             <div className="card">
               <div className="card-header">
-                <div className="card-title">
-                  <div className="icon">📈</div>
-                  {result.ticker} · {T[lang].dailyChart}
-                </div>
+                <div className="card-title"><div className="icon">📈</div>{result.ticker} · {T[lang].dailyChart}</div>
                 <div className="card-meta">{T[lang].chartMeta}</div>
               </div>
               <div style={{ padding: '16px 20px 20px', display: 'flex', gap: '12px' }}>
@@ -476,10 +426,7 @@ export default function Home() {
             <div className="section-divider">{T[lang].indicatorsDivider}</div>
             <div className="card">
               <div className="card-header">
-                <div className="card-title">
-                  <div className="icon">⚡</div>
-                  {T[lang].indicatorReadings}
-                </div>
+                <div className="card-title"><div className="icon">⚡</div>{T[lang].indicatorReadings}</div>
                 <div className="card-meta">{T[lang].indicatorsMeta}</div>
               </div>
               <div className="indicators-grid">
@@ -495,11 +442,7 @@ export default function Home() {
                   <div className="ind-label">{T[lang].rsiLabel}</div>
                   <div className="ind-value">{ind.rsi.toFixed(1)}</div>
                   <div className="ind-sub">{findSignal('RSI')?.note}</div>
-                  {findSignal('RSI') && (
-                    <div className={`ind-badge ${findSignal('RSI')!.result}`}>
-                      {badgeText(findSignal('RSI')!.result)}
-                    </div>
-                  )}
+                  {findSignal('RSI') && <div className={`ind-badge ${findSignal('RSI')!.result}`}>{badgeText(findSignal('RSI')!.result)}</div>}
                   <div className="ind-tooltip"><p>{T[lang].indicatorExplanations.RSI}</p></div>
                 </div>
 
@@ -507,47 +450,15 @@ export default function Home() {
                   <div className="ind-label">{T[lang].macdLabel}</div>
                   <div className="ind-value">{ind.macd.toFixed(3)}</div>
                   <div className="ind-sub">{T[lang].macdSub(ind.macd_signal.toFixed(3), ind.macd_hist.toFixed(3))}</div>
-                  {findSignal('MACD') && (
-                    <div className={`ind-badge ${findSignal('MACD')!.result}`}>
-                      {badgeText(findSignal('MACD')!.result)}
-                    </div>
-                  )}
+                  {findSignal('MACD') && <div className={`ind-badge ${findSignal('MACD')!.result}`}>{badgeText(findSignal('MACD')!.result)}</div>}
                   <div className="ind-tooltip"><p>{T[lang].indicatorExplanations.MACD}</p></div>
-                </div>
-
-                <div className="indicator-card">
-                  <div className="ind-label">{T[lang].ema20Label}</div>
-                  <div className="ind-value">{ind.ema20.toFixed(2)}</div>
-                  <div className="ind-sub">{findSignal('EMA20')?.note}</div>
-                  {findSignal('EMA20') && (
-                    <div className={`ind-badge ${findSignal('EMA20')!.result}`}>
-                      {badgeText(findSignal('EMA20')!.result)}
-                    </div>
-                  )}
-                  <div className="ind-tooltip"><p>{T[lang].indicatorExplanations.EMA20}</p></div>
-                </div>
-
-                <div className="indicator-card">
-                  <div className="ind-label">{T[lang].ema50Label}</div>
-                  <div className="ind-value">{ind.ema50.toFixed(2)}</div>
-                  <div className="ind-sub">{findSignal('EMA50')?.note}</div>
-                  {findSignal('EMA50') && (
-                    <div className={`ind-badge ${findSignal('EMA50')!.result}`}>
-                      {badgeText(findSignal('EMA50')!.result)}
-                    </div>
-                  )}
-                  <div className="ind-tooltip"><p>{T[lang].indicatorExplanations.EMA50}</p></div>
                 </div>
 
                 <div className="indicator-card">
                   <div className="ind-label">{T[lang].volumeLabel}</div>
                   <div className="ind-value">{ind.vol_ratio.toFixed(2)}×</div>
                   <div className="ind-sub">{T[lang].vsAvg}</div>
-                  {findSignal('Volume') && (
-                    <div className={`ind-badge ${findSignal('Volume')!.result}`}>
-                      {badgeText(findSignal('Volume')!.result)}
-                    </div>
-                  )}
+                  {findSignal('Volume') && <div className={`ind-badge ${findSignal('Volume')!.result}`}>{badgeText(findSignal('Volume')!.result)}</div>}
                   <div className="ind-tooltip"><p>{T[lang].indicatorExplanations.Volume}</p></div>
                 </div>
 
@@ -555,11 +466,7 @@ export default function Home() {
                   <div className="ind-label">{T[lang].vwapLabel}</div>
                   <div className="ind-value">{ind.vwap.toFixed(2)}</div>
                   <div className="ind-sub">{findSignal('VWAP')?.note}</div>
-                  {findSignal('VWAP') && (
-                    <div className={`ind-badge ${findSignal('VWAP')!.result}`}>
-                      {badgeText(findSignal('VWAP')!.result)}
-                    </div>
-                  )}
+                  {findSignal('VWAP') && <div className={`ind-badge ${findSignal('VWAP')!.result}`}>{badgeText(findSignal('VWAP')!.result)}</div>}
                   <div className="ind-tooltip"><p>{T[lang].indicatorExplanations.VWAP}</p></div>
                 </div>
 
@@ -567,11 +474,7 @@ export default function Home() {
                   <div className="ind-label">{T[lang].supertrendLabel}</div>
                   <div className="ind-value">{ind.supertrend.toFixed(2)}</div>
                   <div className="ind-sub">{ind.supertrend_trend === 'up' ? T[lang].trendUp : T[lang].trendDown}</div>
-                  {findSignal('Supertrend') && (
-                    <div className={`ind-badge ${findSignal('Supertrend')!.result}`}>
-                      {badgeText(findSignal('Supertrend')!.result)}
-                    </div>
-                  )}
+                  {findSignal('Supertrend') && <div className={`ind-badge ${findSignal('Supertrend')!.result}`}>{badgeText(findSignal('Supertrend')!.result)}</div>}
                   <div className="ind-tooltip"><p>{T[lang].indicatorExplanations.Supertrend}</p></div>
                 </div>
 
@@ -579,11 +482,7 @@ export default function Home() {
                   <div className="ind-label">{T[lang].adLabel}</div>
                   <div className="ind-value">{formatLargeNumber(ind.ad)}</div>
                   <div className="ind-sub">{findSignal('A/D')?.note}</div>
-                  {findSignal('A/D') && (
-                    <div className={`ind-badge ${findSignal('A/D')!.result}`}>
-                      {badgeText(findSignal('A/D')!.result)}
-                    </div>
-                  )}
+                  {findSignal('A/D') && <div className={`ind-badge ${findSignal('A/D')!.result}`}>{badgeText(findSignal('A/D')!.result)}</div>}
                   <div className="ind-tooltip"><p>{T[lang].indicatorExplanations.AD}</p></div>
                 </div>
 
@@ -591,11 +490,7 @@ export default function Home() {
                   <div className="ind-label">{T[lang].fiLabel}</div>
                   <div className="ind-value">{formatLargeNumber(ind.fi)}</div>
                   <div className="ind-sub">{findSignal('FI')?.note}</div>
-                  {findSignal('FI') && (
-                    <div className={`ind-badge ${findSignal('FI')!.result}`}>
-                      {badgeText(findSignal('FI')!.result)}
-                    </div>
-                  )}
+                  {findSignal('FI') && <div className={`ind-badge ${findSignal('FI')!.result}`}>{badgeText(findSignal('FI')!.result)}</div>}
                   <div className="ind-tooltip"><p>{T[lang].indicatorExplanations.FI}</p></div>
                 </div>
 
@@ -605,10 +500,7 @@ export default function Home() {
             <div className="section-divider">{T[lang].summaryDivider}</div>
             <div className="card">
               <div className="card-header">
-                <div className="card-title">
-                  <div className="icon">💬</div>
-                  {T[lang].analysisTitle}
-                </div>
+                <div className="card-title"><div className="icon">💬</div>{T[lang].analysisTitle}</div>
                 <div className="card-meta">{T[lang].analysisMeta}</div>
               </div>
               <div className="explanation-box">
@@ -627,9 +519,7 @@ export default function Home() {
             <p>{T[lang].emptyText}</p>
             <div className="example-tickers">
               {['SPY', 'QQQ', 'NVDA', 'AAPL', 'BTC-USD'].map((sym) => (
-                <div key={sym} className="ex-chip" onClick={() => setTicker(sym)}>
-                  {sym}
-                </div>
+                <div key={sym} className="ex-chip" onClick={() => setTicker(sym)}>{sym}</div>
               ))}
             </div>
           </div>

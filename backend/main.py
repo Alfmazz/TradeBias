@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from analysis import analyze_ticker
 from odte import analyze_0dte
+from news import get_news
 
 app = FastAPI(title="TradeBias API", version="0.1.0")
 
@@ -57,5 +58,22 @@ def odte(ticker: str, lang: str = "en"):
 
     if "error" in result:
         raise HTTPException(status_code=404, detail=result["error"])
+
+    return result
+
+
+@app.get("/api/news/{ticker}")
+def news(ticker: str, lang: str = "en"):
+    ticker = ticker.strip().upper()
+
+    if not ticker or len(ticker) > 12:
+        raise HTTPException(status_code=400, detail="Invalid ticker symbol.")
+
+    lang = lang if lang in ("en", "es") else "en"
+
+    try:
+        result = get_news(ticker, lang=lang)
+    except Exception:
+        raise HTTPException(status_code=500, detail="Something went wrong while fetching news. Please try again.")
 
     return result

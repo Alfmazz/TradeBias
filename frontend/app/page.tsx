@@ -3,6 +3,10 @@
 import { useState, useEffect } from 'react';
 import PriceChart, { type Candle } from '../components/PriceChart';
 import VolumeProfile, { type VolumeBin } from '../components/VolumeProfile';
+import OdteSection from '../components/OdteSection';
+import NewsSection from '../components/NewsSection';
+
+type Tab = 'analysis' | 'odte';
 
 type Lang = 'en' | 'es';
 type SignalResult = 'bull' | 'bear' | 'neutral';
@@ -65,6 +69,8 @@ const TICKER_PATTERN = /^[A-Z0-9.\-]{1,10}$/;
 const T = {
   en: {
     tagline: 'CLARITY OVER PREDICTION',
+    tabAnalysis: 'Analysis',
+    tabOdte: '0DTE',
     heroLine1: 'Read the',
     heroLine2: "market's mood.",
     heroSubtitle: '// ENTER A TICKER TO BEGIN ANALYSIS',
@@ -141,6 +147,8 @@ const T = {
   },
   es: {
     tagline: 'CLARIDAD SOBRE PREDICCIÓN',
+    tabAnalysis: 'Análisis',
+    tabOdte: '0DTE',
     heroLine1: 'Lee el',
     heroLine2: 'ánimo del mercado.',
     heroSubtitle: '// INGRESA UN TICKER PARA COMENZAR EL ANÁLISIS',
@@ -223,6 +231,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [lang, setLang] = useState<Lang>('en');
+  const [activeTab, setActiveTab] = useState<Tab>('analysis');
 
   useEffect(() => {
     const saved = localStorage.getItem('tradebias_lang');
@@ -306,6 +315,25 @@ export default function Home() {
       </header>
 
       <main>
+        <div className="tab-bar">
+          <button
+            className={`tab-btn ${activeTab === 'analysis' ? 'active' : ''}`}
+            onClick={() => setActiveTab('analysis')}
+          >
+            {T[lang].tabAnalysis}
+          </button>
+          <button
+            className={`tab-btn ${activeTab === 'odte' ? 'active' : ''}`}
+            onClick={() => setActiveTab('odte')}
+          >
+            {T[lang].tabOdte}
+          </button>
+        </div>
+
+        {activeTab === 'odte' && <OdteSection lang={lang} />}
+
+        {activeTab === 'analysis' && (
+        <>
         <div className="hero">
           <h1>{T[lang].heroLine1}<br /><span>{T[lang].heroLine2}</span></h1>
           <p>{T[lang].heroSubtitle}</p>
@@ -509,6 +537,8 @@ export default function Home() {
               </div>
             </div>
 
+            <NewsSection ticker={result.ticker} lang={lang} />
+
           </div>
         )}
 
@@ -523,6 +553,8 @@ export default function Home() {
               ))}
             </div>
           </div>
+        )}
+        </>
         )}
       </main>
 
